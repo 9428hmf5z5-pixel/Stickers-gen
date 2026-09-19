@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Generador de Stickers</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f2f2f2;color:#222}
+header{background:#222;color:#fff;padding:16px 20px;text-align:center}
+h1{margin:0;font-size:22px}
+.app{display:flex;gap:18px;padding:18px;max-width:1500px;margin:auto;align-items:flex-start}
+.panel{width:310px;background:#fff;border-radius:12px;padding:18px;box-shadow:0 2px 10px #0001;position:sticky;top:15px}
+.preview-wrap{flex:1;display:flex;justify-content:center;overflow:auto;padding:10px}
+.section{border-top:1px solid #ddd;padding-top:14px;margin-top:14px}
+label{font-size:13px;font-weight:bold;display:block;margin-bottom:6px}
+input[type=file]{width:100%}
+button{border:0;border-radius:8px;padding:10px 12px;margin:4px 2px;cursor:pointer;background:#222;color:#fff;font-weight:bold}
+button.secondary{background:#e8e8e8;color:#222}
+button:active{transform:scale(.98)}
+.control-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
+input[type=range]{width:100%}
+.value{font-size:12px;color:#666;text-align:right}
+.hint{font-size:12px;color:#666;line-height:1.35}
+#page{
+  width:8.5in;height:11in;background:#fff;position:relative;
+  overflow:hidden;box-shadow:0 3px 20px #0003;
+  flex:none;
+}
+.piece{position:absolute;overflow:hidden;background:#fff}
+.circle{border-radius:50%}
+.image-layer{
+  position:absolute;left:0;top:0;width:100%;height:100%;
+  display:none;object-fit:cover;object-position:50% 50%;
+  transform-origin:center center;pointer-events:none;
+}
+.circle .image-layer{border-radius:50%}
+.piece-label{
+  position:absolute;z-index:4;left:3px;top:3px;background:#fff9;color:#333;
+  font:7px Arial;padding:1px 2px;border-radius:2px;display:none;
+}
+.show-labels .piece-label{display:block}
+.status{background:#f5f5f5;border-radius:8px;padding:9px;font-size:12px;margin-top:10px}
+
+@media(max-width:900px){
+  .app{flex-direction:column}.panel{width:100%;position:static}.preview-wrap{width:100%}
+  #page{transform-origin:top center}
+}
+
+@media print{
+  @page{size:letter portrait;margin:0}
+  html,body{margin:0!important;padding:0!important;background:#fff!important}
+  header,.panel{display:none!important}
+  .app{padding:0!important;margin:0!important;display:block!important}
+  .preview-wrap{padding:0!important;margin:0!important;display:block!important}
+  #page{
+    display:block!important;
+    margin:0!important;
+    width:8.5in!important;
+    height:11in!important;
+    min-width:8.5in!important;
+    min-height:11in!important;
+    max-width:8.5in!important;
+    max-height:11in!important;
+    box-shadow:none!important;
+    overflow:hidden!important;
+    break-after:avoid-page!important;
+    page-break-after:avoid!important;
+  }
+}
+</style>
+</head>
+<body>
+<header><h1>Generador de Stickers — Hoja Carta</h1></header>
+
+<div class="app">
+  <aside class="panel">
+    <label>1. Carga una imagen</label>
+    <input id="file" type="file" accept="image/*">
+    <p class="hint">En iPhone puedes elegir una foto desde Fotos o una imagen desde Archivos.</p>
+
+    <div class="section">
+      <label>Ajuste de imagen</label>
+      <div class="control-row">
+        <button onclick="centerImage()">🎯 Centrar</button>
+        <button class="secondary" onclick="resetImage()">↺ Restablecer</button>
+      </div>
+
+      <label>Zoom</label>
+      <input id="zoom" type="range" min="50" max="300" value="100">
+      <div class="value" id="zoomVal">100%</div>
+
+      <label>Horizontal</label>
+      <input id="x" type="range" min="-100" max="100" value="0">
+      <div class="value" id="xVal">0</div>
+
+      <label>Vertical</label>
+      <input id="y" type="range" min="-100" max="100" value="0">
+      <div class="value" id="yVal">0</div>
+
+      <div class="control-row">
+        <button onclick="nudge(-5,0)">←</button>
+        <button onclick="nudge(5,0)">→</button>
+        <button onclick="nudge(0,-5)">↑</button>
+        <button onclick="nudge(0,5)">↓</button>
+      </div>
+
+      <button style="width:100%" onclick="applyToAll()">✓ Aplicar imagen a todas</button>
+    </div>
+
+    <div class="section">
+      <label>Vista</label>
+      <button class="secondary" onclick="toggleLabels()">Mostrar/ocultar piezas</button>
+    </div>
+
+    <div class="section">
+      <label>Impresión</label>
+      <button style="width:100%" onclick="printActualSize()">🖨️ Imprimir tamaño real</button>
+      <button class="secondary" style="width:100%" onclick="downloadPDF()">📄 Guardar como PDF</button>
+      <button class="secondary" style="width:100%" onclick="downloadSVG()">◇ Descargar SVG</button>
+      <p class="hint">Carta 8.5 × 11". En el diálogo de impresión usa escala 100% y desactiva "Ajustar a página" si aparece.</p>
+    </div>
+
+    <div class="status">
+      <b>Hoja:</b> Carta 8.5 × 11"<br>
+      <b>Stickers:</b> 102 × 5/8"<br>
+      <b>Círculo grande:</b> 5"<br>
+      <b>Rectángulos:</b> 2 × 0.8" × 2.3" verticales
+    </div>
+  </aside>
+
+  <main class="preview-wrap">
+    <div id="page"></div>
+  </main>
+</div>
+
+<script>
+const IN=96;
+const page=document.getElementById('page');
+
+const state={
+  zoom:100,
+  x:0,
+  y:0,
+  imgURL:null,
+  imgData:null,
+  showLabels:false
+};
+
+const sizes={
+  sticker:0.625*IN,
+  big:5*IN,
+  rectW:0.8*IN,
+  rectH:2.3*IN
+};
+
+function addPiece(type,left,top,width,height,label){
+  const p=document.createElement('div');
+  p.className='piece '+(type==='circle'?'circle':'rect');
+  p.style.left=left+'px';
+  p.style.top=top+'px';
+  p.style.width=width+'px';
+  p.style.height=height+'px';
+  p.dataset.type=type;
+  p.dataset.left=left;
+  p.dataset.top=top;
+  p.dataset.width=width;
+  p.dataset.height=height;
+  p.innerHTML='<img class="image-layer" alt=""><span class="piece-label">'+label+'</span>';
+  page.appendChild(p);
+  return p;
+}
+
+/*
+  DISTRIBUCIÓN REAL PARA UNA SOLA HOJA CARTA:
+
+  - Círculo grande: 5" × 5", arriba a la izquierda.
+  - 2 rectángulos: 0.8" de ancho × 2.3" de alto, VERTICALES,
+    arriba a la derecha.
+  - 102 círculos pequeños de 5/8": 12 columnas × 9 filas
+    = 108 espacios; se usan solamente los primeros 102.
+*/
+function build(){
+  page.innerHTML='';
+
+  // Círculo grande
+  addPiece('circle',
+    0.25*IN, 0.25*IN,
+    sizes.big, sizes.big,
+    '5"'
+  );
+
+  // RECTÁNGULOS VERTICALES
+  addPiece('rect',
+    5.65*IN, 0.55*IN,
+    sizes.rectW, sizes.rectH,
+    '0.8" × 2.3"'
+  );
+
+  addPiece('rect',
+    6.75*IN, 0.55*IN,
+    sizes.rectW, sizes.rectH,
+    '0.8" × 2.3"'
+  );
+
+  // 102 círculos pequeños: 12 × 9 = 108 espacios
+  const d=sizes.sticker;
+  const cols=12;
+  const rows=9;
+  const startX=0.25*IN;
+  const startY=5.35*IN;
+  const gapX=0;
+  const gapY=0;
+
+  let n=0;
+
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      if(n>=102) break;
+      n++;
+      addPiece(
+        'circle',
+        startX+c*(d+gapX),
+        startY+r*(d+gapY),
+        d,d,
+        '#'+n
+      );
+    }
+  }
+
+  render();
+}
+
+build();
+
+document.getElementById('file').addEventListener('change',function(e){
+  const file=e.target.files && e.target.files[0];
+  if(!file)return;
+
+  if(state.imgURL){
+    try{URL.revokeObjectURL(state.imgURL)}catch(err){}
+  }
+
+  state.imgURL=URL.createObjectURL(file);
+  state.imgData=null;
+
+  // Convertimos también a Data URL para que el SVG descargado
+  // conserve la imagen aunque el objeto URL deje de existir.
+  const reader=new FileReader();
+
+  reader.onload=function(){
+    state.imgData=reader.result;
+    render();
+  };
+
+  reader.onerror=function(){
+    render();
+  };
+
+  reader.readAsDataURL(file);
+
+  const test=new Image();
+
+  test.onload=function(){
+    render();
+  };
+
+  test.onerror=function(){
+    alert('No se pudo cargar esta imagen. Prueba con JPG o PNG desde Fotos.');
+  };
+
+  test.src=state.imgURL;
+
+  render();
+});
+
+function render(){
+  document.getElementById('zoomVal').textContent=state.zoom+'%';
+  document.getElementById('xVal').textContent=state.x;
+  document.getElementById('yVal').textContent=state.y;
+
+  document.querySelectorAll('.image-layer').forEach(img=>{
+    if(!state.imgURL){
+      img.removeAttribute('src');
+      img.style.display='none';
+      return;
+    }
+
+    img.src=state.imgURL;
+    img.style.display='block';
+    img.style.objectFit='cover';
+    img.style.objectPosition=`${50 + state.x/2}% ${50 + state.y/2}%`;
+    img.style.transform=`scale(${state.zoom/100})`;
+    img.style.transformOrigin='center center';
+  });
+}
+
+document.getElementById('zoom').oninput=e=>{
+  state.zoom=+e.target.value;
+  render();
+};
+
+document.getElementById('x').oninput=e=>{
+  state.x=+e.target.value;
+  render();
+};
+
+document.getElementById('y').oninput=e=>{
+  state.y=+e.target.value;
+  render();
+};
+
+function centerImage(){
+  state.zoom=100;
+  state.x=0;
+  state.y=0;
+
+  document.getElementById('zoom').value=100;
+  document.getElementById('x').value=0;
+  document.getElementById('y').value=0;
+
+  render();
+}
+
+function resetImage(){
+  centerImage();
+}
+
+function nudge(dx,dy){
+  state.x=Math.max(-100,Math.min(100,state.x+dx));
+  state.y=Math.max(-100,Math.min(100,state.y+dy));
+
+  document.getElementById('x').value=state.x;
+  document.getElementById('y').value=state.y;
+
+  render();
+}
+
+function applyToAll(){
+  render();
+  alert('Imagen y ajustes aplicados a todas las piezas.');
+}
+
+function toggleLabels(){
+  state.showLabels=!state.showLabels;
+  page.classList.toggle('show-labels',state.showLabels);
+}
+
+function printActualSize(){
+  if(!state.imgURL){
+    alert('Primero carga una imagen.');
+    return;
+  }
+
+  const oldTitle=document.title;
+  document.title='Stickers_Carta_8.5x11';
+
+  window.print();
+
+  setTimeout(()=>{
+    document.title=oldTitle;
+  },1000);
+}
+
+function downloadPDF(){
+  printActualSize();
+}
+
+function downloadSVG(){
+  if(!state.imgData){
+    alert('Espera un momento a que termine de cargar la imagen y vuelve a intentar.');
+    return;
+  }
+
+  const svgNS='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(svgNS,'svg');
+
+  svg.setAttribute('xmlns',svgNS);
+  svg.setAttribute('width','8.5in');
+  svg.setAttribute('height','11in');
+  svg.setAttribute('viewBox','0 0 816 1056');
+
+  const bg=document.createElementNS(svgNS,'rect');
+  bg.setAttribute('width','816');
+  bg.setAttribute('height','1056');
+  bg.setAttribute('fill','white');
+  svg.appendChild(bg);
+
+  const testImg=new Image();
+
+  testImg.onload=function(){
+    const iw=testImg.naturalWidth;
+    const ih=testImg.naturalHeight;
+
+    document.querySelectorAll('.piece').forEach((piece,index)=>{
+      const x=parseFloat(piece.dataset.left);
+      const y=parseFloat(piece.dataset.top);
+      const w=parseFloat(piece.dataset.width);
+      const h=parseFloat(piece.dataset.height);
+      const type=piece.dataset.type;
+
+      const clipId='clip'+index;
+
+      const clip=document.createElementNS(svgNS,'clipPath');
+      clip.setAttribute('id',clipId);
+
+      const shape=document.createElementNS(
+        svgNS,
+        type==='circle'?'circle':'rect'
+      );
+
+      if(type==='circle'){
+        shape.setAttribute('cx',x+w/2);
+        shape.setAttribute('cy',y+h/2);
+        shape.setAttribute('r',Math.min(w,h)/2);
+      }else{
+        shape.setAttribute('x',x);
+        shape.setAttribute('y',y);
+        shape.setAttribute('width',w);
+        shape.setAttribute('height',h);
+      }
+
+      clip.appendChild(shape);
+      svg.appendChild(clip);
+
+      // Ajuste tipo "cover" + zoom + desplazamiento
+      const baseScale=Math.max(w/iw,h/ih);
+      const scale=baseScale*(state.zoom/100);
+
+      const drawW=iw*scale;
+      const drawH=ih*scale;
+
+      const dx=x+w/2-drawW/2+(state.x/100)*w;
+      const dy=y+h/2-drawH/2+(state.y/100)*h;
+
+      const im=document.createElementNS(svgNS,'image');
+
+      im.setAttribute('x',dx);
+      im.setAttribute('y',dy);
+      im.setAttribute('width',drawW);
+      im.setAttribute('height',drawH);
+      im.setAttribute('preserveAspectRatio','none');
+      im.setAttribute('href',state.imgData);
+      im.setAttributeNS(
+        'http://www.w3.org/1999/xlink',
+        'xlink:href',
+        state.imgData
+      );
+      im.setAttribute('clip-path',`url(#${clipId})`);
+
+      svg.appendChild(im);
+    });
+
+    const xml=
+      '<?xml version="1.0" encoding="UTF-8"?>\n'+
+      new XMLSerializer().serializeToString(svg);
+
+    const blob=new Blob(
+      [xml],
+      {type:'image/svg+xml;charset=utf-8'}
+    );
+
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+
+    a.href=url;
+    a.download='Stickers_Carta_8.5x11.svg';
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    setTimeout(()=>{
+      URL.revokeObjectURL(url);
+    },1000);
+  };
+
+  testImg.onerror=function(){
+    alert('No se pudo preparar la imagen para el SVG.');
+  };
+
+  testImg.src=state.imgData;
+}
+</script>
+</body>
+</html>
